@@ -77,6 +77,20 @@ const App: React.FC = () => {
     }
   }, [generationsUsed, storageKey]);
 
+  /**
+   * IMPORTANT FOR MOBILE: AudioContext MUST be initialized or resumed
+   * inside a direct user interaction event (like onClick).
+   */
+  const ensureAudioContext = async () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+    return audioContextRef.current;
+  };
+
   const handleStop = () => {
     if (sourceRef.current) {
       try { sourceRef.current.stop(); } catch(e) {}
@@ -86,6 +100,9 @@ const App: React.FC = () => {
   };
 
   const handlePlay = async () => {
+    // 1. Immediate trigger for AudioContext on mobile
+    const ctx = await ensureAudioContext();
+
     if (isPlaying) { handleStop(); return; }
     if (isGenerating) { setIsGenerating(false); generationIdRef.current++; return; }
     
@@ -108,7 +125,8 @@ const App: React.FC = () => {
         voiceA: { name: soloVoice, speakerName: activeSoloVoice?.displayName || 'Speaker' }
       };
 
-      const result = await generateSpeech(text, config, DYNAMIC_RADIO_PERSONA);
+      // Pass the context to ensure the decoder uses the same hardware parameters
+      const result = await generateSpeech(text, config, DYNAMIC_RADIO_PERSONA, ctx);
       
       if (currentGenId !== generationIdRef.current) return;
 
@@ -116,15 +134,12 @@ const App: React.FC = () => {
       setIsGenerating(false);
       setIsPlaying(true);
       
-      if (!audioContextRef.current) audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (audioContextRef.current.state === 'suspended') await audioContextRef.current.resume();
-
-      const source = audioContextRef.current.createBufferSource();
+      const source = ctx.createBufferSource();
       source.buffer = result.buffer;
-      source.connect(audioContextRef.current.destination);
+      source.connect(ctx.destination);
       source.onended = () => setIsPlaying(false);
       sourceRef.current = source;
-      source.start();
+      source.start(0);
     } catch (err) {
       setError("Erreur studio. Vérifiez votre connexion.");
       setIsGenerating(false);
@@ -150,15 +165,11 @@ const App: React.FC = () => {
   const switchMode = (dialogue: boolean) => {
     if (dialogue === isDialogueMode) return;
     
-    // Auto-prefill dialogue if current text is the solo template or empty
     if (dialogue && (text === fixedStyle.templateText || !text.trim())) {
       setText(DEFAULT_DIALOGUE_TEMPLATE(activeMaleVoice?.displayName || 'Pierre', activeFemaleVoice?.displayName || 'Sophie'));
     } 
-    // Revert to solo template if switching back and current text is a dialogue template
     else if (!dialogue && (text.includes('[') && text.includes(':'))) {
-      if (text.length > 50) { // Keep their dialogue if they wrote a lot
-        // Optional: keep text. For now let's just switch mode.
-      } else {
+      if (text.length <= 50) {
         setText(fixedStyle.templateText);
       }
     }
