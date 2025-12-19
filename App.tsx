@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { INTRO_STYLES, DYNAMIC_RADIO_PERSONA } from './constants';
+import { INTRO_STYLES, DYNAMIC_RADIO_PERSONA, DEFAULT_DIALOGUE_TEMPLATE } from './constants';
 import { ALL_VOICES } from './voices';
 import { StyleSelector } from './components/StyleSelector';
 import { PlayIcon, StopIcon } from './components/PulseUI';
@@ -147,6 +147,25 @@ const App: React.FC = () => {
     finally { setIsDramatizing(false); }
   };
 
+  const switchMode = (dialogue: boolean) => {
+    if (dialogue === isDialogueMode) return;
+    
+    // Auto-prefill dialogue if current text is the solo template or empty
+    if (dialogue && (text === fixedStyle.templateText || !text.trim())) {
+      setText(DEFAULT_DIALOGUE_TEMPLATE(activeMaleVoice?.displayName || 'Pierre', activeFemaleVoice?.displayName || 'Sophie'));
+    } 
+    // Revert to solo template if switching back and current text is a dialogue template
+    else if (!dialogue && (text.includes('[') && text.includes(':'))) {
+      if (text.length > 50) { // Keep their dialogue if they wrote a lot
+        // Optional: keep text. For now let's just switch mode.
+      } else {
+        setText(fixedStyle.templateText);
+      }
+    }
+    
+    setIsDialogueMode(dialogue);
+  };
+
   const isLimitReached = generationsUsed >= MAX_GENERATIONS;
 
   return (
@@ -164,13 +183,13 @@ const App: React.FC = () => {
             <span className="text-[9px] font-black uppercase text-white/30 tracking-widest pl-1">Mode Studio</span>
             <div className="bg-black/40 p-1 rounded-xl border border-white/5 flex gap-1 shadow-inner">
               <button 
-                onClick={() => setIsDialogueMode(false)}
+                onClick={() => switchMode(false)}
                 className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${!isDialogueMode ? 'bg-white text-pulse-bg shadow-lg' : 'text-white/40 hover:text-white/70'}`}
               >
                 Solo
               </button>
               <button 
-                onClick={() => setIsDialogueMode(true)}
+                onClick={() => switchMode(true)}
                 className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${isDialogueMode ? 'bg-pulse-purple text-white shadow-glow-purple' : 'text-white/40 hover:text-white/70'}`}
               >
                 Duo
