@@ -31,6 +31,11 @@ export const INTRO_STYLES: IntroStyle[] = [
     templateText: "C'est le moment ! Ne ratez pas l'offre incroyable d'AdEasy.io ! Une puissance de voix off instantanée, une clarté absolue, et une énergie qui va booster vos projets comme jamais ! Rendez-vous sur AdEasy.io dès maintenant !",
   }
 ];
+export const DEFAULT_DIALOGUE_TEMPLATE = (voiceA: string, voiceB: string) => 
+`${voiceA}: [laughing] Alors ${voiceB}, prête pour le grand saut avec AdEasy.io ?
+${voiceB}: [enthusiastic] Oh oui ${voiceA} ! C'est tellement simple de créer des spots incroyables !
+${voiceA}: [thinking] Et le rendu est bluffant, non ?
+${voiceB}: [chuckling] C'est carrément magique ! On devrait essayer sur tous nos projets !`;
 
 export const CUSTOM_STYLE: IntroStyle = {
   id: 'custom',
