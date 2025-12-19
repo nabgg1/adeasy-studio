@@ -19,6 +19,12 @@ function decode(base64: string) {
   return bytes;
 }
 
+/**
+ * Mobile-friendly audio decoder.
+ * iOS requires an active AudioContext and often fails if we try to decode raw PCM manually 
+ * in a way that doesn't align with the hardware's expected format.
+ * Here we map the 16-bit PCM bytes to a Float32 array for the AudioBuffer.
+ */
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -32,6 +38,7 @@ async function decodeAudioData(
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
+      // Convert 16-bit signed integer to 32-bit floating point [-1.0, 1.0]
       channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
@@ -51,7 +58,8 @@ export interface DialogueConfig {
 export const generateSpeech = async (
   text: string, 
   config: DialogueConfig,
-  styleInstruction?: string
+  styleInstruction?: string,
+  providedContext?: AudioContext // Accept existing context to avoid blocking on mobile
 ): Promise<GeneratedAudio> => {
   const ai = getClient();
   
@@ -99,17 +107,15 @@ export const generateSpeech = async (
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) throw new Error("Aucune donnée audio retournée.");
 
-    const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    // Use provided context or create a new one (new one might be suspended on mobile)
+    const audioCtx = providedContext || new (window.AudioContext || (window as any).webkitAudioContext)({
       sampleRate: 24000, 
     });
 
-    try {
-      const audioBytes = decode(base64Audio);
-      const audioBuffer = await decodeAudioData(audioBytes, outputAudioContext, 24000, 1);
-      return { buffer: audioBuffer, rawData: audioBytes };
-    } finally {
-      await outputAudioContext.close();
-    }
+    const audioBytes = decode(base64Audio);
+    const audioBuffer = await decodeAudioData(audioBytes, audioCtx, 24000, 1);
+    
+    return { buffer: audioBuffer, rawData: audioBytes };
   } catch (error) {
     console.error("Erreur de génération vocale:", error);
     throw error;
