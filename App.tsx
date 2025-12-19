@@ -78,12 +78,14 @@ const App: React.FC = () => {
   }, [generationsUsed, storageKey]);
 
   /**
-   * IMPORTANT FOR MOBILE: AudioContext MUST be initialized or resumed
-   * inside a direct user interaction event (like onClick).
+   * FIX IPHONE : Initialisation globale du contexte audio.
+   * On le crée une seule fois et on le réveille à chaque clic.
    */
-  const ensureAudioContext = async () => {
+  const unlockAudioContext = async () => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
+          sampleRate: 24000
+      });
     }
     if (audioContextRef.current.state === 'suspended') {
       await audioContextRef.current.resume();
@@ -100,8 +102,8 @@ const App: React.FC = () => {
   };
 
   const handlePlay = async () => {
-    // 1. Immediate trigger for AudioContext on mobile
-    const ctx = await ensureAudioContext();
+    // Étape critique pour iOS : Débloquer le contexte sur le clic
+    const ctx = await unlockAudioContext();
 
     if (isPlaying) { handleStop(); return; }
     if (isGenerating) { setIsGenerating(false); generationIdRef.current++; return; }
@@ -125,7 +127,7 @@ const App: React.FC = () => {
         voiceA: { name: soloVoice, speakerName: activeSoloVoice?.displayName || 'Speaker' }
       };
 
-      // Pass the context to ensure the decoder uses the same hardware parameters
+      // iOS demande que le décodage se fasse dans un contexte actif
       const result = await generateSpeech(text, config, DYNAMIC_RADIO_PERSONA, ctx);
       
       if (currentGenId !== generationIdRef.current) return;
@@ -141,6 +143,7 @@ const App: React.FC = () => {
       sourceRef.current = source;
       source.start(0);
     } catch (err) {
+      console.error(err);
       setError("Erreur studio. Vérifiez votre connexion.");
       setIsGenerating(false);
     }
@@ -164,16 +167,12 @@ const App: React.FC = () => {
 
   const switchMode = (dialogue: boolean) => {
     if (dialogue === isDialogueMode) return;
-    
     if (dialogue && (text === fixedStyle.templateText || !text.trim())) {
       setText(DEFAULT_DIALOGUE_TEMPLATE(activeMaleVoice?.displayName || 'Pierre', activeFemaleVoice?.displayName || 'Sophie'));
     } 
     else if (!dialogue && (text.includes('[') && text.includes(':'))) {
-      if (text.length <= 50) {
-        setText(fixedStyle.templateText);
-      }
+      if (text.length <= 50) setText(fixedStyle.templateText);
     }
-    
     setIsDialogueMode(dialogue);
   };
 
@@ -181,34 +180,20 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen md:h-screen w-full bg-pulse-bg text-white overflow-y-auto md:overflow-hidden font-sans select-none scroll-touch">
-      
-      {/* 1. Sidebar - LEFT */}
       <aside className="w-full md:w-64 lg:w-72 flex-shrink-0 border-b md:border-b-0 md:border-r border-white/10 z-20 flex flex-col bg-black/40 md:bg-black/20">
         <div className="p-6 pb-2 flex flex-col gap-6">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-pulse-cyan to-pulse-purple animate-pulse shadow-glow-cyan"></div>
             <h1 className="text-xl font-black uppercase tracking-tighter text-white">AdEasy.io</h1>
           </div>
-
           <div className="flex flex-col gap-2">
             <span className="text-[9px] font-black uppercase text-white/30 tracking-widest pl-1">Mode Studio</span>
             <div className="bg-black/40 p-1 rounded-xl border border-white/5 flex gap-1 shadow-inner">
-              <button 
-                onClick={() => switchMode(false)}
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${!isDialogueMode ? 'bg-white text-pulse-bg shadow-lg' : 'text-white/40 hover:text-white/70'}`}
-              >
-                Solo
-              </button>
-              <button 
-                onClick={() => switchMode(true)}
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${isDialogueMode ? 'bg-pulse-purple text-white shadow-glow-purple' : 'text-white/40 hover:text-white/70'}`}
-              >
-                Duo
-              </button>
+              <button onClick={() => switchMode(false)} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${!isDialogueMode ? 'bg-white text-pulse-bg shadow-lg' : 'text-white/40 hover:text-white/70'}`}>Solo</button>
+              <button onClick={() => switchMode(true)} className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all duration-300 ${isDialogueMode ? 'bg-pulse-purple text-white shadow-glow-purple' : 'text-white/40 hover:text-white/70'}`}>Duo</button>
             </div>
           </div>
         </div>
-
         <div className="flex-1 md:min-h-0 overflow-visible md:overflow-hidden mt-4">
           <StyleSelector 
             isDialogueMode={isDialogueMode}
@@ -222,20 +207,14 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* 2. Main Content */}
       <main className="flex-1 flex flex-col relative min-w-0 bg-gradient-to-b from-transparent to-black/10">
-        
         <header className="flex-shrink-0 p-4 md:px-8 md:py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 bg-black/10">
           <div className="w-full sm:w-auto">
-            <h2 className="text-xl md:text-2xl lg:text-3xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/20 truncate">
-              STUDIO ADEASY
-            </h2>
+            <h2 className="text-xl md:text-2xl lg:text-3xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/20 truncate">STUDIO ADEASY</h2>
             <div className="flex items-center gap-3 mt-1">
               <div className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${isLimitReached ? 'bg-pulse-pink shadow-glow-pink' : 'bg-pulse-neon shadow-glow-cyan animate-pulse'}`}></span>
-                <span className={`text-[9px] font-mono uppercase tracking-widest font-black ${isLimitReached ? 'text-pulse-pink' : 'text-pulse-neon'}`}>
-                  {isLimitReached ? 'QUOTA ÉPUISÉ' : 'Production ready'}
-                </span>
+                <span className={`text-[9px] font-mono uppercase tracking-widest font-black ${isLimitReached ? 'text-pulse-pink' : 'text-pulse-neon'}`}>{isLimitReached ? 'QUOTA ÉPUISÉ' : 'Production ready'}</span>
               </div>
             </div>
           </div>
@@ -244,34 +223,24 @@ const App: React.FC = () => {
         <div className="flex-1 min-h-[400px] md:min-h-0 p-4 md:p-8 lg:p-12 overflow-y-visible md:overflow-y-auto">
           <div className="relative h-full min-h-[300px] group max-w-[1200px] mx-auto">
             <div className={`absolute -inset-1 bg-gradient-to-r transition-all duration-1000 blur-xl opacity-10 group-hover:opacity-20 ${isDialogueMode ? 'from-pulse-purple to-pulse-pink' : 'from-pulse-cyan to-pulse-purple'}`}></div>
-            
             <div className="relative h-full glass rounded-[32px] md:rounded-[48px] p-6 md:p-12 flex flex-col shadow-2xl overflow-hidden">
               <div className="flex justify-between items-center mb-6 md:mb-8">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black font-mono text-white/20 uppercase tracking-[0.3em]">
-                    {isDialogueMode ? 'Scénario Duo' : 'Éditeur Solo'}
-                  </span>
+                  <span className="text-[10px] font-black font-mono text-white/20 uppercase tracking-[0.3em]">{isDialogueMode ? 'Scénario Duo' : 'Éditeur Solo'}</span>
                   <div className={`h-0.5 w-8 ${isDialogueMode ? 'bg-pulse-purple/40' : 'bg-pulse-cyan/40'} mt-1`}></div>
                 </div>
-                
-                <button 
-                  onClick={handleDramatize}
-                  disabled={isDramatizing || isLimitReached}
-                  className={`group flex items-center justify-center gap-3 px-5 py-2.5 md:px-6 md:py-3 rounded-full bg-white/5 border border-white/10 ${isDialogueMode ? 'hover:border-pulse-purple/50 hover:bg-pulse-purple/5' : 'hover:border-pulse-cyan/50 hover:bg-pulse-cyan/5'} transition-all disabled:opacity-20`}
-                >
+                <button onClick={handleDramatize} disabled={isDramatizing || isLimitReached} className={`group flex items-center justify-center gap-3 px-5 py-2.5 md:px-6 md:py-3 rounded-full bg-white/5 border border-white/10 ${isDialogueMode ? 'hover:border-pulse-purple/50 hover:bg-pulse-purple/5' : 'hover:border-pulse-cyan/50 hover:bg-pulse-cyan/5'} transition-all disabled:opacity-20`}>
                   <span className={`text-[9px] md:text-[10px] font-black uppercase ${isDialogueMode ? 'text-pulse-purple' : 'text-pulse-cyan'} tracking-widest whitespace-nowrap`}>
                     {isDramatizing ? 'OPTIMISATION...' : '✨ ' + (isDialogueMode ? 'améliorer dialogue' : 'Booster Solo')}
                   </span>
                 </button>
               </div>
-
               <textarea 
                 className={`flex-1 min-h-[200px] w-full bg-transparent border-none outline-none resize-none font-bold leading-relaxed placeholder-white/5 transition-all selection:bg-pulse-cyan/30 ${isDialogueMode ? 'text-lg md:text-2xl font-mono text-white/90' : 'text-xl md:text-3xl lg:text-5xl text-white'}`}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={isDialogueMode ? `${activeMaleVoice?.displayName}: [laughing] Hello !\n${activeFemaleVoice?.displayName}: [enthusiastic] Salut !` : "Entrez votre texte publicitaire ici..."}
               />
-
               <div className="mt-4 md:mt-6 flex justify-end items-center gap-4 text-white/20 text-[10px] font-mono">
                 <span className="uppercase tracking-widest">{text.length} characters</span>
               </div>
@@ -281,7 +250,6 @@ const App: React.FC = () => {
 
         <section className="flex-shrink-0 bg-black/60 border-t border-white/10 backdrop-blur-xl p-6 md:p-8">
           <div className="max-w-[1400px] mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
-            
             <div className="flex flex-col items-center md:items-start w-full md:w-56 order-3 md:order-1">
               <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] mb-1">Quota Journalier</span>
               <div className="flex items-center gap-4 w-full">
@@ -291,50 +259,30 @@ const App: React.FC = () => {
                  </div>
               </div>
             </div>
-
             <div className="flex flex-col items-center justify-center gap-4 order-1 md:order-2">
               <button 
                 onClick={handlePlay}
                 disabled={(isLimitReached && !isPlaying) || isLoadingIp}
-                className={`
-                  w-20 h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center transition-all duration-700 transform relative z-10
-                  ${isGenerating ? 'bg-pulse-gray border-4 border-pulse-cyan' : 
-                    isPlaying ? 'bg-white text-pulse-bg shadow-glow-cyan rotate-180 scale-105' : 
-                    (isLimitReached || isLoadingIp) ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5 opacity-50' :
-                    isDialogueMode ? 'bg-pulse-purple shadow-glow-purple hover:scale-105 active:scale-95' :
-                    'bg-pulse-cyan shadow-glow-cyan hover:scale-105 active:scale-95'}
-                `}
+                className={`w-20 h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center transition-all duration-700 transform relative z-10 ${isGenerating ? 'bg-pulse-gray border-4 border-pulse-cyan' : isPlaying ? 'bg-white text-pulse-bg shadow-glow-cyan rotate-180 scale-105' : (isLimitReached || isLoadingIp) ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5 opacity-50' : isDialogueMode ? 'bg-pulse-purple shadow-glow-purple hover:scale-105 active:scale-95' : 'bg-pulse-cyan shadow-glow-cyan hover:scale-105 active:scale-95'}`}
               >
-                {(isPlaying || isGenerating) && (
-                   <div className="absolute inset-0 rounded-full border-4 border-pulse-cyan/50 animate-ping"></div>
-                )}
+                {(isPlaying || isGenerating) && <div className="absolute inset-0 rounded-full border-4 border-pulse-cyan/50 animate-ping"></div>}
                 {isGenerating ? (
                   <div className="flex items-end gap-1 mb-1">
                     <div className="w-1.5 h-4 bg-pulse-cyan rounded-full animate-waveform"></div>
                     <div className="w-1.5 h-8 bg-pulse-cyan rounded-full animate-waveform [animation-delay:-0.2s]"></div>
                     <div className="w-1.5 h-6 bg-pulse-cyan rounded-full animate-waveform [animation-delay:-0.4s]"></div>
                   </div>
-                ) : isPlaying ? (
-                  <StopIcon className="w-8 h-8 md:w-10 md:h-10" />
-                ) : (
-                  <PlayIcon className="w-10 h-10 md:w-14 md:h-14 ml-2" />
-                )}
+                ) : isPlaying ? <StopIcon className="w-8 h-8 md:w-10 md:h-10" /> : <PlayIcon className="w-10 h-10 md:w-14 md:h-14 ml-2" />}
               </button>
-              
               <div className={`flex items-end gap-1 h-8 transition-all duration-500 ${isPlaying ? 'opacity-100' : 'opacity-20'}`}>
                 {Array.from({ length: 16 }).map((_, i) => (
                   <div key={i} className={`w-1 ${isDialogueMode ? 'bg-pulse-purple' : 'bg-pulse-cyan'} rounded-full ${isPlaying ? 'animate-waveform' : ''}`} style={{ height: isPlaying ? `${30 + Math.random() * 70}%` : '20%', animationDelay: `${i * 0.1}s` }} />
                 ))}
               </div>
             </div>
-
             <div className="flex flex-col items-center md:items-end gap-1.5 w-full md:w-64 text-center md:text-right order-2 md:order-3">
               <a href="mailto:contact@adeasy.io" className="text-[11px] font-black text-white hover:text-pulse-cyan transition-colors uppercase tracking-widest">contact@adeasy.io</a>
               <div className="text-[10px] font-black uppercase text-white/40 tracking-wider">SASU NCG 2025</div>
-              <div className="flex items-center justify-center md:justify-end gap-2">
-                <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">Powered by</span>
-                <span className="text-[10px] font-black text-pulse-cyan/60 uppercase tracking-widest">adeasy.io</span>
-              </div>
               <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5">
                 <span className="text-[8px] font-mono text-white/30 uppercase">Your IP:</span>
                 <span className="text-[8px] font-mono text-pulse-neon/80 font-bold">{userIp || 'Scanning...'}</span>
@@ -342,9 +290,7 @@ const App: React.FC = () => {
             </div>
           </div>
         </section>
-
       </main>
-
       {error && (
         <div className="fixed bottom-10 md:bottom-36 left-1/2 -translate-x-1/2 bg-pulse-pink text-white px-10 py-5 rounded-3xl font-black text-xs uppercase shadow-glow-pink animate-bounce z-[60] text-center min-w-[300px] md:min-w-[320px] backdrop-blur-xl border border-white/20">
           {error}
