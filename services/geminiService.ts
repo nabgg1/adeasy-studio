@@ -69,7 +69,7 @@ export const generateSpeech = async (
       speaker: config.voiceB.speakerName,
       voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceB.name } },
     });
-    ttsPrompt = `Ceci est une conversation audio réelle. Respecte scrupuleusement les noms des locuteurs pour changer de voix.
+    ttsPrompt = `Ceci est une conversation audio réelle en FRANÇAIS (FRANCE). Respecte scrupuleusement les noms des locuteurs pour changer de voix.
     
     CONVERSATION:
     ${text}`;
@@ -127,34 +127,35 @@ export const dramatizeText = async (
   
   try {
     const soloPrompt = `
-      TU ES UN RÉDACTEUR PUBLICITAIRE GÉNIAL ET DISRUPTIF.
+      TU ES UN RÉDACTEUR PUBLICITAIRE GÉNIAL ET DISRUPTIF UTILISANT UN FRANÇAIS (FRANCE) MODERNE ET NATUREL.
       TA MISSION : Transformer ce texte ennuyeux en un spot radio SOLO mémorable.
       
       CONSIGNES CRÉATIVES :
       - Sois audacieux, drôle, ou extrêmement inspirant.
+      - Utilise un ton de voix "français" authentique, évite les tournures de phrases trop formelles ou calquées sur l'anglais.
       - Varie les structures (commence par une question, une exclamation, ou un fait surprenant).
       - PAS DE CLICHÉS ("Vous en avez marre de...").
       - Écris les sites web normalement (ex: adeasy.io).
       - NE JAMAIS UTILISER D'ABRÉVIATIONS.
       
       Texte source: "${text}"
-      Renvoie UNIQUEMENT le nouveau texte du spot.
+      Renvoie UNIQUEMENT le nouveau texte du spot en français de France.
     `;
 
     const dialoguePrompt = `
-      TU ES UN SCÉNARISTE DE FICTION RADIO. 
-      TA MISSION : Créer un dialogue ultra-réaliste et vivant entre ${voiceAName} et ${voiceBName}.
+      TU ES UN SCÉNARISTE DE FICTION RADIO SPÉCIALISÉ DANS LE DIALOGUE FRANÇAIS (FRANCE). 
+      TA MISSION : Créer un dialogue ultra-réaliste et vivant entre ${voiceAName} et ${voiceBName} en utilisant un français naturel, fluide et contemporain.
       
       CONSIGNES DE MISE EN SCÈNE (IMPORTANT) :
       - Incorpore EXCLUSIVEMENT des expressions vocales humaines entre crochets EN ANGLAIS pour une meilleure interprétation par le moteur vocal : [laughing], [sighing], [hesitating], [whispering], [enthusiastic], [breathing], [thinking], [chuckling].
       - INTERDICTION ABSOLUE d'inclure des bruits extérieurs ou effets sonores d'ambiance (ex: [car noise], [music], [door slam]). Seules les expressions de la voix sont permises.
-      - Les personnages doivent avoir une vraie interaction (ils se coupent la parole, réagissent aux propos de l'autre).
+      - Les personnages doivent avoir une vraie interaction "à la française" (ils se coupent la parole, réagissent aux propos de l'autre avec naturel).
       - Utilise EXCLUSIVEMENT les noms "${voiceAName}" et "${voiceBName}".
       - Respecte l'écriture des sites web (ex: adeasy.io).
       
       FORMAT STRICT :
-      ${voiceAName}: [Expression in English] Texte en français
-      ${voiceBName}: [Expression in English] Réaction en français
+      ${voiceAName}: [Expression in English] Texte en français (France)
+      ${voiceBName}: [Expression in English] Réaction en français (France)
       
       Texte source: "${text}"
       Renvoie UNIQUEMENT le dialogue scénarisé.
