@@ -21,9 +21,8 @@ function decode(base64: string) {
 
 /**
  * Mobile-friendly audio decoder.
- * iOS requires an active AudioContext and often fails if we try to decode raw PCM manually 
- * in a way that doesn't align with the hardware's expected format.
- * Here we map the 16-bit PCM bytes to a Float32 array for the AudioBuffer.
+ * Sur iPhone, l'AudioContext doit être actif au moment de la création du buffer.
+ * On utilise un buffer Int16 (PCM linéaire) provenant de l'API Gemini.
  */
 async function decodeAudioData(
   data: Uint8Array,
@@ -31,14 +30,17 @@ async function decodeAudioData(
   sampleRate: number = 24000,
   numChannels: number = 1
 ): Promise<AudioBuffer> {
+  // PCM 16-bit signed
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
+  
+  // Création du buffer audio avec le sampleRate exact de l'API (24kHz)
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      // Convert 16-bit signed integer to 32-bit floating point [-1.0, 1.0]
+      // Normalisation cruciale pour iPhone/Android entre -1.0 et 1.0
       channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
   }
@@ -59,7 +61,7 @@ export const generateSpeech = async (
   text: string, 
   config: DialogueConfig,
   styleInstruction?: string,
-  providedContext?: AudioContext // Accept existing context to avoid blocking on mobile
+  providedContext?: AudioContext
 ): Promise<GeneratedAudio> => {
   const ai = getClient();
   
@@ -107,13 +109,13 @@ export const generateSpeech = async (
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) throw new Error("Aucune donnée audio retournée.");
 
-    // Use provided context or create a new one (new one might be suspended on mobile)
-    const audioCtx = providedContext || new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: 24000, 
-    });
+    // iOS FIX: Toujours utiliser le contexte passé depuis le clic utilisateur
+    if (!providedContext) {
+        throw new Error("AudioContext obligatoire pour iOS");
+    }
 
     const audioBytes = decode(base64Audio);
-    const audioBuffer = await decodeAudioData(audioBytes, audioCtx, 24000, 1);
+    const audioBuffer = await decodeAudioData(audioBytes, providedContext, 24000, 1);
     
     return { buffer: audioBuffer, rawData: audioBytes };
   } catch (error) {
@@ -138,30 +140,25 @@ export const dramatizeText = async (
       
       CONSIGNES CRÉATIVES :
       - Sois audacieux, drôle, ou extrêmement inspirant.
-      - Utilise un ton de voix "français" authentique, évite les tournures de phrases trop formelles ou calquées sur l'anglais.
-      - Varie les structures (commence par une question, une exclamation, ou un fait surprenant).
-      - PAS DE CLICHÉS ("Vous en avez marre de...").
+      - Utilise un ton de voix "français" authentique.
       - Écris les sites web normalement (ex: adeasy.io).
-      - NE JAMAIS UTILISER D'ABRÉVIATIONS.
       
       Texte source: "${text}"
-      Renvoie UNIQUEMENT le nouveau texte du spot en français de France.
+      Renvoie UNIQUEMENT le nouveau texte du spot.
     `;
 
     const dialoguePrompt = `
       TU ES UN SCÉNARISTE DE FICTION RADIO SPÉCIALISÉ DANS LE DIALOGUE FRANÇAIS (FRANCE). 
-      TA MISSION : Créer un dialogue ultra-réaliste et vivant entre ${voiceAName} et ${voiceBName} en utilisant un français naturel, fluide et contemporain.
+      TA MISSION : Créer un dialogue ultra-réaliste entre ${voiceAName} et ${voiceBName}.
       
-      CONSIGNES DE MISE EN SCÈNE (IMPORTANT) :
-      - Incorpore EXCLUSIVEMENT des expressions vocales humaines entre crochets EN ANGLAIS pour une meilleure interprétation par le moteur vocal : [laughing], [sighing], [hesitating], [whispering], [enthusiastic], [breathing], [thinking], [chuckling].
-      - INTERDICTION ABSOLUE d'inclure des bruits extérieurs ou effets sonores d'ambiance (ex: [car noise], [music], [door slam]). Seules les expressions de la voix sont permises.
-      - Les personnages doivent avoir une vraie interaction "à la française" (ils se coupent la parole, réagissent aux propos de l'autre avec naturel).
+      CONSIGNES :
+      - Balises vocalises en anglais : [laughing], [sighing], [hesitating], [whispering], [enthusiastic], [breathing], [thinking], [chuckling].
+      - Pas d'effets sonores.
       - Utilise EXCLUSIVEMENT les noms "${voiceAName}" et "${voiceBName}".
-      - Respecte l'écriture des sites web (ex: adeasy.io).
       
       FORMAT STRICT :
-      ${voiceAName}: [Expression in English] Texte en français (France)
-      ${voiceBName}: [Expression in English] Réaction en français (France)
+      ${voiceAName}: [Expression] Texte
+      ${voiceBName}: [Expression] Réaction
       
       Texte source: "${text}"
       Renvoie UNIQUEMENT le dialogue scénarisé.
@@ -172,9 +169,7 @@ export const dramatizeText = async (
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
-      config: {
-        temperature: 1,
-      }
+      config: { temperature: 1 }
     });
     return response.text?.trim() || text;
   } catch (error) {
