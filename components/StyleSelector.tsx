@@ -16,6 +16,8 @@ interface VoiceSelectorProps {
   onVoiceBSelect: (name: string) => void;
 }
 
+type GenderFilter = 'MALE' | 'FEMALE';
+
 export const StyleSelector: React.FC<VoiceSelectorProps> = ({ 
   isDialogueMode, 
   selectedSoloVoice, 
@@ -26,11 +28,28 @@ export const StyleSelector: React.FC<VoiceSelectorProps> = ({
   onVoiceBSelect 
 }) => {
   const [activeTab, setActiveTab] = useState<'A' | 'B'>('A');
+  const [filterA, setFilterA] = useState<GenderFilter>('MALE');
+  const [filterB, setFilterB] = useState<GenderFilter>('FEMALE');
+  const [filterSolo, setFilterSolo] = useState<GenderFilter>('MALE');
 
-  const renderVoiceList = (currentSelected: string, onSelect: (name: string) => void, filterGender?: 'MALE' | 'FEMALE') => (
+  const renderFilterButtons = (current: GenderFilter, setFilter: (f: GenderFilter) => void) => (
+    <div className="flex gap-1 mb-2">
+      {(['MALE', 'FEMALE'] as GenderFilter[]).map((f) => (
+        <button
+          key={f}
+          onClick={() => setFilter(f)}
+          className={`flex-1 py-1 text-[8px] font-black uppercase tracking-widest rounded-md border transition-all ${current === f ? 'bg-white/20 border-white/40 text-white' : 'border-white/5 text-white/30 hover:text-white/50'}`}
+        >
+          {f === 'MALE' ? 'Hommes' : 'Femmes'}
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderVoiceList = (currentSelected: string, onSelect: (name: string) => void, activeFilter: GenderFilter) => (
     <div className="flex flex-row md:flex-col gap-3 overflow-x-auto md:overflow-x-hidden md:overflow-y-auto pb-4 md:pb-0 snap-x snap-mandatory no-scrollbar h-full">
       {ALL_VOICES
-        .filter(v => !filterGender || v.ssmlGender === filterGender)
+        .filter(v => v.ssmlGender === activeFilter)
         .map((voice) => (
         <button
           key={voice.name}
@@ -77,8 +96,9 @@ export const StyleSelector: React.FC<VoiceSelectorProps> = ({
           <div className="flex items-center justify-between px-1">
             <h3 className="text-[9px] uppercase tracking-[0.2em] font-black text-white/30">Casting</h3>
           </div>
+          {renderFilterButtons(filterSolo, setFilterSolo)}
           <div className="flex-1 overflow-hidden">
-            {renderVoiceList(selectedSoloVoice, onSoloSelect)}
+            {renderVoiceList(selectedSoloVoice, onSoloSelect, filterSolo)}
           </div>
         </div>
       ) : (
@@ -93,24 +113,34 @@ export const StyleSelector: React.FC<VoiceSelectorProps> = ({
               onClick={() => setActiveTab('A')}
               className={`relative z-10 flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'A' ? 'text-white' : 'text-white/30 hover:text-white/60'}`}
             >
-              Lui
+              Voix 1
               {activeTab === 'A' && <div className="absolute inset-0 bg-pulse-purple rounded-lg -z-10 shadow-glow-purple/40"></div>}
             </button>
             <button 
               onClick={() => setActiveTab('B')}
               className={`relative z-10 flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'B' ? 'text-white' : 'text-white/30 hover:text-white/60'}`}
             >
-              Elle
+              Voix 2
               {activeTab === 'B' && <div className="absolute inset-0 bg-pulse-pink rounded-lg -z-10 shadow-glow-pink/40"></div>}
             </button>
           </div>
           
-          <div className="flex-1 overflow-hidden">
-            {/* Fix: replaced voiceMale and voiceFemale with voiceA and voiceB from props */}
-            {activeTab === 'A' 
-              ? renderVoiceList(voiceA, onVoiceASelect, 'MALE') 
-              : renderVoiceList(voiceB, onVoiceBSelect, 'FEMALE')
-            }
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {activeTab === 'A' ? (
+              <>
+                {renderFilterButtons(filterA, setFilterA)}
+                <div className="flex-1 overflow-hidden">
+                  {renderVoiceList(voiceA, onVoiceASelect, filterA)}
+                </div>
+              </>
+            ) : (
+              <>
+                {renderFilterButtons(filterB, setFilterB)}
+                <div className="flex-1 overflow-hidden">
+                  {renderVoiceList(voiceB, onVoiceBSelect, filterB)}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
