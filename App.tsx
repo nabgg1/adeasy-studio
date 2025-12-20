@@ -21,8 +21,8 @@ const App: React.FC = () => {
   
   // Voices State
   const [soloVoice, setSoloVoice] = useState<string>(fixedStyle.defaultVoice);
-  const [voiceMale, setVoiceMale] = useState<string>(ALL_VOICES.find(v => v.ssmlGender === 'MALE')?.name || 'Orus');
-  const [voiceFemale, setVoiceFemale] = useState<string>(ALL_VOICES.find(v => v.ssmlGender === 'FEMALE')?.name || 'Kore');
+  const [voiceA, setVoiceA] = useState<string>(ALL_VOICES.find(v => v.ssmlGender === 'MALE')?.name || 'Orus');
+  const [voiceB, setVoiceB] = useState<string>(ALL_VOICES.find(v => v.ssmlGender === 'FEMALE')?.name || 'Kore');
 
   // Identity & Quota
   const [userIp, setUserIp] = useState<string | null>(null);
@@ -41,8 +41,8 @@ const App: React.FC = () => {
 
   // Compute Voice Data
   const activeSoloVoice = useMemo(() => ALL_VOICES.find(v => v.name === soloVoice), [soloVoice]);
-  const activeMaleVoice = useMemo(() => ALL_VOICES.find(v => v.name === voiceMale), [voiceMale]);
-  const activeFemaleVoice = useMemo(() => ALL_VOICES.find(v => v.name === voiceFemale), [voiceFemale]);
+  const activeVoiceA = useMemo(() => ALL_VOICES.find(v => v.name === voiceA), [voiceA]);
+  const activeVoiceB = useMemo(() => ALL_VOICES.find(v => v.name === voiceB), [voiceB]);
 
   const storageKey = useMemo(() => {
     if (!userIp) return null;
@@ -102,7 +102,6 @@ const App: React.FC = () => {
   };
 
   const handlePlay = async () => {
-    // Étape critique pour iOS : Débloquer le contexte sur le clic
     const ctx = await unlockAudioContext();
 
     if (isPlaying) { handleStop(); return; }
@@ -121,13 +120,12 @@ const App: React.FC = () => {
 
     try {
       const config = isDialogueMode ? {
-        voiceA: { name: voiceMale, speakerName: activeMaleVoice?.displayName || 'Lui' },
-        voiceB: { name: voiceFemale, speakerName: activeFemaleVoice?.displayName || 'Elle' }
+        voiceA: { name: voiceA, speakerName: activeVoiceA?.displayName || 'Voix 1' },
+        voiceB: { name: voiceB, speakerName: activeVoiceB?.displayName || 'Voix 2' }
       } : {
         voiceA: { name: soloVoice, speakerName: activeSoloVoice?.displayName || 'Speaker' }
       };
 
-      // iOS demande que le décodage se fasse dans un contexte actif
       const result = await generateSpeech(text, config, DYNAMIC_RADIO_PERSONA, ctx);
       
       if (currentGenId !== generationIdRef.current) return;
@@ -157,8 +155,8 @@ const App: React.FC = () => {
         text, 
         DYNAMIC_RADIO_PERSONA, 
         isDialogueMode,
-        activeMaleVoice?.displayName || 'Lui',
-        activeFemaleVoice?.displayName || 'Elle'
+        activeVoiceA?.displayName || 'Voix 1',
+        activeVoiceB?.displayName || 'Voix 2'
       );
       setText(res);
     } catch (e) { setError("Erreur de script."); }
@@ -167,11 +165,21 @@ const App: React.FC = () => {
 
   const switchMode = (dialogue: boolean) => {
     if (dialogue === isDialogueMode) return;
-    if (dialogue && (text === fixedStyle.templateText || !text.trim())) {
-      setText(DEFAULT_DIALOGUE_TEMPLATE(activeMaleVoice?.displayName || 'Pierre', activeFemaleVoice?.displayName || 'Sophie'));
+    
+    const duoTemplate = DEFAULT_DIALOGUE_TEMPLATE(activeVoiceA?.displayName || 'Pierre', activeVoiceB?.displayName || 'Sophie');
+    const soloTemplate = fixedStyle.templateText;
+
+    if (dialogue) {
+      // Passage vers DUO : On remplace si c'est le texte solo par défaut ou si c'est vide
+      if (text === soloTemplate || !text.trim()) {
+        setText(duoTemplate);
+      }
     } 
-    else if (!dialogue && (text.includes('[') && text.includes(':'))) {
-      if (text.length <= 50) setText(fixedStyle.templateText);
+    else {
+      // Passage vers SOLO : On remplace si c'est le texte duo par défaut ou si le texte contient des marqueurs de dialogue
+      if (text === duoTemplate || text.includes('[') || text.includes(':') || !text.trim()) {
+        setText(soloTemplate);
+      }
     }
     setIsDialogueMode(dialogue);
   };
@@ -198,11 +206,11 @@ const App: React.FC = () => {
           <StyleSelector 
             isDialogueMode={isDialogueMode}
             selectedSoloVoice={soloVoice}
-            voiceA={voiceMale}
-            voiceB={voiceFemale}
+            voiceA={voiceA}
+            voiceB={voiceB}
             onSoloSelect={setSoloVoice}
-            onVoiceASelect={setVoiceMale}
-            onVoiceBSelect={setVoiceFemale}
+            onVoiceASelect={setVoiceA}
+            onVoiceBSelect={setVoiceB}
           />
         </div>
       </aside>
@@ -211,11 +219,12 @@ const App: React.FC = () => {
         <header className="flex-shrink-0 p-4 md:px-8 md:py-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 bg-black/10">
           <div className="w-full sm:w-auto">
             <h2 className="text-xl md:text-2xl lg:text-3xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/20 truncate">STUDIO ADEASY</h2>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex flex-col gap-0.5 mt-1">
               <div className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${isLimitReached ? 'bg-pulse-pink shadow-glow-pink' : 'bg-pulse-neon shadow-glow-cyan animate-pulse'}`}></span>
                 <span className={`text-[9px] font-mono uppercase tracking-widest font-black ${isLimitReached ? 'text-pulse-pink' : 'text-pulse-neon'}`}>{isLimitReached ? 'QUOTA ÉPUISÉ' : 'Production ready'}</span>
               </div>
+              <p className="text-[8px] font-mono uppercase text-white/40 tracking-wider">écrivez des éléments ou votre texte et appuyez sur améliorer</p>
             </div>
           </div>
         </header>
@@ -231,7 +240,7 @@ const App: React.FC = () => {
                 </div>
                 <button onClick={handleDramatize} disabled={isDramatizing || isLimitReached} className={`group flex items-center justify-center gap-3 px-5 py-2.5 md:px-6 md:py-3 rounded-full bg-white/5 border border-white/10 ${isDialogueMode ? 'hover:border-pulse-purple/50 hover:bg-pulse-purple/5' : 'hover:border-pulse-cyan/50 hover:bg-pulse-cyan/5'} transition-all disabled:opacity-20`}>
                   <span className={`text-[9px] md:text-[10px] font-black uppercase ${isDialogueMode ? 'text-pulse-purple' : 'text-pulse-cyan'} tracking-widest whitespace-nowrap`}>
-                    {isDramatizing ? 'OPTIMISATION...' : '✨ ' + (isDialogueMode ? 'améliorer dialogue' : 'Booster Solo')}
+                    {isDramatizing ? 'OPTIMISATION...' : '✨ ' + (isDialogueMode ? 'améliorer dialogue' : 'améliorer le texte')}
                   </span>
                 </button>
               </div>
@@ -239,7 +248,7 @@ const App: React.FC = () => {
                 className={`flex-1 min-h-[200px] w-full bg-transparent border-none outline-none resize-none font-bold leading-relaxed placeholder-white/5 transition-all selection:bg-pulse-cyan/30 ${isDialogueMode ? 'text-lg md:text-2xl font-mono text-white/90' : 'text-xl md:text-3xl lg:text-5xl text-white'}`}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder={isDialogueMode ? `${activeMaleVoice?.displayName}: [laughing] Hello !\n${activeFemaleVoice?.displayName}: [enthusiastic] Salut !` : "Entrez votre texte publicitaire ici..."}
+                placeholder={isDialogueMode ? `${activeVoiceA?.displayName}: [laughing] Hello !\n${activeVoiceB?.displayName}: [enthusiastic] Salut !` : "Entrez votre texte publicitaire ici..."}
               />
               <div className="mt-4 md:mt-6 flex justify-end items-center gap-4 text-white/20 text-[10px] font-mono">
                 <span className="uppercase tracking-widest">{text.length} characters</span>
@@ -259,27 +268,68 @@ const App: React.FC = () => {
                  </div>
               </div>
             </div>
-            <div className="flex flex-col items-center justify-center gap-4 order-1 md:order-2">
-              <button 
-                onClick={handlePlay}
-                disabled={(isLimitReached && !isPlaying) || isLoadingIp}
-                className={`w-20 h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center transition-all duration-700 transform relative z-10 ${isGenerating ? 'bg-pulse-gray border-4 border-pulse-cyan' : isPlaying ? 'bg-white text-pulse-bg shadow-glow-cyan rotate-180 scale-105' : (isLimitReached || isLoadingIp) ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5 opacity-50' : isDialogueMode ? 'bg-pulse-purple shadow-glow-purple hover:scale-105 active:scale-95' : 'bg-pulse-cyan shadow-glow-cyan hover:scale-105 active:scale-95'}`}
-              >
-                {(isPlaying || isGenerating) && <div className="absolute inset-0 rounded-full border-4 border-pulse-cyan/50 animate-ping"></div>}
-                {isGenerating ? (
-                  <div className="flex items-end gap-1 mb-1">
-                    <div className="w-1.5 h-4 bg-pulse-cyan rounded-full animate-waveform"></div>
-                    <div className="w-1.5 h-8 bg-pulse-cyan rounded-full animate-waveform [animation-delay:-0.2s]"></div>
-                    <div className="w-1.5 h-6 bg-pulse-cyan rounded-full animate-waveform [animation-delay:-0.4s]"></div>
+
+            <div className="flex items-center justify-center gap-4 sm:gap-6 md:gap-12 order-1 md:order-2 w-full md:auto">
+              {/* Voice Preview - Visible on Mobile & Desktop */}
+              <div className="flex items-center gap-1.5 sm:gap-3">
+                {isDialogueMode ? (
+                  <div className="flex items-center gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-white/5 rounded-2xl border border-white/5">
+                    <div className="flex -space-x-2 sm:-space-x-3">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-pulse-purple overflow-hidden bg-black flex-shrink-0">
+                        <img src={activeVoiceA?.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-pulse-pink overflow-hidden bg-black flex-shrink-0">
+                        <img src={activeVoiceB?.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="hidden sm:block text-[8px] font-black uppercase text-white/40 tracking-widest leading-none mb-1">Casting Duo</span>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-white leading-none truncate max-w-[60px] sm:max-w-[80px]">
+                        {activeVoiceA?.displayName.split(' ')[0]} & {activeVoiceB?.displayName.split(' ')[0]}
+                      </span>
+                    </div>
                   </div>
-                ) : isPlaying ? <StopIcon className="w-8 h-8 md:w-10 md:h-10" /> : <PlayIcon className="w-10 h-10 md:w-14 md:h-14 ml-2" />}
-              </button>
-              <div className={`flex items-end gap-1 h-8 transition-all duration-500 ${isPlaying ? 'opacity-100' : 'opacity-20'}`}>
-                {Array.from({ length: 16 }).map((_, i) => (
-                  <div key={i} className={`w-1 ${isDialogueMode ? 'bg-pulse-purple' : 'bg-pulse-cyan'} rounded-full ${isPlaying ? 'animate-waveform' : ''}`} style={{ height: isPlaying ? `${30 + Math.random() * 70}%` : '20%', animationDelay: `${i * 0.1}s` }} />
-                ))}
+                ) : (
+                  <div className="flex items-center gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-white/5 rounded-2xl border border-white/5">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 border-pulse-cyan overflow-hidden bg-black flex-shrink-0">
+                      <img src={activeSoloVoice?.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="hidden sm:block text-[8px] font-black uppercase text-white/40 tracking-widest leading-none mb-1">Voix Solo</span>
+                      <span className="text-[9px] sm:text-[10px] font-bold text-white leading-none truncate max-w-[60px] sm:max-w-[80px]">
+                        {activeSoloVoice?.displayName}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              <div className="flex flex-col items-center justify-center gap-2 sm:gap-4">
+                <button 
+                  onClick={handlePlay}
+                  disabled={(isLimitReached && !isPlaying) || isLoadingIp}
+                  className={`w-16 h-16 sm:w-20 sm:h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center transition-all duration-700 transform relative z-10 ${isGenerating ? 'bg-pulse-gray border-4 border-pulse-cyan' : isPlaying ? 'bg-white text-pulse-bg shadow-glow-cyan rotate-180 scale-105' : (isLimitReached || isLoadingIp) ? 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5 opacity-50' : isDialogueMode ? 'bg-pulse-purple shadow-glow-purple hover:scale-105 active:scale-95' : 'bg-pulse-cyan shadow-glow-cyan hover:scale-105 active:scale-95'}`}
+                >
+                  {(isPlaying || isGenerating) && <div className="absolute inset-0 rounded-full border-4 border-pulse-cyan/50 animate-ping"></div>}
+                  {isGenerating ? (
+                    <div className="flex items-end gap-1 mb-1">
+                      <div className="w-1 h-3 sm:w-1.5 sm:h-4 bg-pulse-cyan rounded-full animate-waveform"></div>
+                      <div className="w-1 h-6 sm:w-1.5 sm:h-8 bg-pulse-cyan rounded-full animate-waveform [animation-delay:-0.2s]"></div>
+                      <div className="w-1 h-4 sm:w-1.5 sm:h-6 bg-pulse-cyan rounded-full animate-waveform [animation-delay:-0.4s]"></div>
+                    </div>
+                  ) : isPlaying ? <StopIcon className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10" /> : <PlayIcon className="w-8 h-8 sm:w-10 sm:h-10 md:w-14 md:h-14 ml-1.5 sm:ml-2" />}
+                </button>
+                <div className={`flex items-end gap-0.5 sm:gap-1 h-6 sm:h-8 transition-all duration-500 ${isPlaying ? 'opacity-100' : 'opacity-20'}`}>
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div key={i} className={`w-0.5 sm:w-1 ${isDialogueMode ? 'bg-pulse-purple' : 'bg-pulse-cyan'} rounded-full ${isPlaying ? 'animate-waveform' : ''}`} style={{ height: isPlaying ? `${30 + Math.random() * 70}%` : '20%', animationDelay: `${i * 0.1}s` }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Spacer for desktop balance only */}
+              <div className="hidden md:block w-[140px]"></div>
             </div>
+
             <div className="flex flex-col items-center md:items-end gap-1.5 w-full md:w-64 text-center md:text-right order-2 md:order-3">
               <a href="mailto:contact@adeasy.io" className="text-[11px] font-black text-white hover:text-pulse-cyan transition-colors uppercase tracking-widest">contact@adeasy.io</a>
               <div className="text-[10px] font-black uppercase text-white/40 tracking-wider">SASU NCG 2025</div>
